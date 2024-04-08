@@ -1,31 +1,66 @@
-const {google} = require('googleapis');
-const credenciais = require('./credenciais.json')
+const { google } = require('googleapis');
+const fetch = require('node-fetch');
+const credenciais = require('./credenciais.json');
 
 const serviceAccountKeyFile = "./credenciais.json";
-const sheetId = credenciais.idPlanilha
-const tabName = 'dados'
-const range = 'A:E'
+const sheetId = credenciais.idPlanilha;
+const tabName = 'dados';
 
 main().then(() => {
-  console.log('Completed')
-})
+  console.log('Completed');
+});
 
 async function main() {
-  // Generating google sheet client
-  const googleSheetClient = await _getGoogleSheetClient();
-
-  // Reading Google Sheet from a specific range
-  const data = await _readGoogleSheet(googleSheetClient, sheetId, tabName, range);
-  console.log(data);
-
-  // Adding a new row to Google Sheet
-  const dataToBeInserted = [
-     ['11', 'rohith', 'Rohith', 'Sharma', 'Active'],
-     ['12', 'virat', 'Virat', 'Kohli', 'Active']
-  ]
-  await _writeGoogleSheet(googleSheetClient, sheetId, tabName, range, dataToBeInserted);
-}
-
+    // Geração do Cliente
+    const googleSheetClient = await _getGoogleSheetClient();
+  
+    // Puxando a API de dados em json
+    const apiData = await _fetchDataFromAPI('https://fakestoreapi.com/products');
+  
+    // Formatando os dados para ser inserido na planilha
+    const formattedData = apiData.map(item => [
+      item.id.toString(),
+      item.title,
+      item.price.toString(),
+      item.description,
+      item.category,
+      item.image,
+      item.rating.rate.toString(),
+      item.rating.count.toString()
+    ]);
+  
+    // Especificando as colunas da planilha
+    const columnHeaders = [
+      'id',
+      'title',
+      'price',
+      'description',
+      'category',
+      'image',
+      'rate',
+      'count'
+    ];
+  
+    // Inserindo as colunas na primeira linha e os dados logo em sequencia
+    const request = {
+      spreadsheetId: sheetId,
+      resource: {
+        valueInputOption: 'USER_ENTERED',
+        data: [{
+          range: `${tabName}!A1`,
+          values: [columnHeaders],
+        }, {
+          range: `${tabName}!A2`,
+          values: formattedData,
+        }],
+      },
+    };
+  
+    // Adicionando os dados formatados no Google Sheet
+    await googleSheetClient.spreadsheets.values.batchUpdate(request);
+  }
+  
+// Função para a criação do cliente
 async function _getGoogleSheetClient() {
   const auth = new google.auth.GoogleAuth({
     keyFile: serviceAccountKeyFile,
@@ -38,24 +73,9 @@ async function _getGoogleSheetClient() {
   });
 }
 
-async function _readGoogleSheet(googleSheetClient, sheetId, tabName, range) {
-  const res = await googleSheetClient.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: `${tabName}!${range}`,
-  });
-
-  return res.data.values;
-}
-
-async function _writeGoogleSheet(googleSheetClient, sheetId, tabName, range, data) {
-  await googleSheetClient.spreadsheets.values.append({
-    spreadsheetId: sheetId,
-    range: `${tabName}!${range}`,
-    valueInputOption: 'USER_ENTERED',
-    insertDataOption: 'INSERT_ROWS',
-    resource: {
-      "majorDimension": "ROWS",
-      "values": data
-    },
-  })
+// Função para requisitar uma url e tratar os dados json
+async function _fetchDataFromAPI(apiUrl) {
+  const response = await fetch(apiUrl);
+  const data = await response.json();
+  return data;
 }
