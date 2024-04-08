@@ -1,52 +1,61 @@
-const { google } = require('googleapis');
+const {google} = require('googleapis');
+const credenciais = require('./credenciais.json')
 
-// Initializes the Google APIs client library and sets up the authentication using service account credentials.
-const auth = new google.auth.GoogleAuth({
-    keyFile: './google.json',  // Path to your service account key file.
-    scopes: ['https://www.googleapis.com/auth/spreadsheets']  // Scope for Google Sheets API.
-});
+const serviceAccountKeyFile = "./credenciais.json";
+const sheetId = credenciais.idPlanilha
+const tabName = 'dados'
+const range = 'A:E'
 
-// Asynchronous function to write data to a Google Sheet.
-async function writeToSheet(values) {
-    const sheets = google.sheets({ version: 'v4', auth });  // Creates a Sheets API client instance.
-    const spreadsheetId = '1Xmtq9LtbSDCvGfrZsVmi8NACsKw55RxtQl4WdD_Mq0o';  // The ID of the spreadsheet.
-    const range = 'Sheet1!A1';  // The range in the sheet where data will be written.
-    const valueInputOption = 'USER_ENTERED';  // How input data should be interpreted.
+main().then(() => {
+  console.log('Completed')
+})
 
-    const resource = { values };  // The data to be written.
+async function main() {
+  // Generating google sheet client
+  const googleSheetClient = await _getGoogleSheetClient();
 
-    try {
-        const res = await sheets.spreadsheets.values.update({
-            spreadsheetId, range, valueInputOption, resource
-        })
-        return res;  // Returns the response from the Sheets API.
-    } catch (error) {
-        console.error('error', error);  // Logs errors.
-    }
+  // Reading Google Sheet from a specific range
+  const data = await _readGoogleSheet(googleSheetClient, sheetId, tabName, range);
+  console.log(data);
+
+  // Adding a new row to Google Sheet
+  const dataToBeInserted = [
+     ['11', 'rohith', 'Rohith', 'Sharma', 'Active'],
+     ['12', 'virat', 'Virat', 'Kohli', 'Active']
+  ]
+  await _writeGoogleSheet(googleSheetClient, sheetId, tabName, range, dataToBeInserted);
 }
 
-// Asynchronous function to read data from a Google Sheet.
-async function readSheet() {
-    const sheets = google.sheets({ version: 'v4', auth });
-    const spreadsheetId = '1Xmtq9LtbSDCvGfrZsVmi8NACsKw55RxtQl4WdD_Mq0o';
-    const range = 'Sheet1!A1:E10';  // Specifies the range to read.
-
-    try {
-        const response = await sheets.spreadsheets.values.get({
-            spreadsheetId, range
-        });
-        const rows = response.data.values;  // Extracts the rows from the response.
-        return rows;  // Returns the rows.
-    } catch (error) {
-        console.error('error', error);  // Logs errors.
-    }
+async function _getGoogleSheetClient() {
+  const auth = new google.auth.GoogleAuth({
+    keyFile: serviceAccountKeyFile,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  });
+  const authClient = await auth.getClient();
+  return google.sheets({
+    version: 'v4',
+    auth: authClient,
+  });
 }
 
-// Immediately-invoked function expression (IIFE) to execute the read and write operations.
-(async () => {
-    const writer = await writeToSheet([['Name', 'Age', 'Location'], ['Ado', 33, 'Miami'], ['Pepe', 21, 'Singapore'], ['Juan', 32, 'Mexico']]);
-    console.log(writer);  // Logs the write operation's response.
+async function _readGoogleSheet(googleSheetClient, sheetId, tabName, range) {
+  const res = await googleSheetClient.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: `${tabName}!${range}`,
+  });
 
-    const data = await readSheet();  // Reads data from the sheet.
-    console.log(data);  // Logs the read data.
-})();
+  return res.data.values;
+}
+
+async function _writeGoogleSheet(googleSheetClient, sheetId, tabName, range, data) {
+  await googleSheetClient.spreadsheets.values.append({
+    spreadsheetId: sheetId,
+    range: `${tabName}!${range}`,
+    valueInputOption: 'USER_ENTERED',
+    insertDataOption: 'INSERT_ROWS',
+    resource: {
+      "majorDimension": "ROWS",
+      "values": data
+    },
+  })
+}
